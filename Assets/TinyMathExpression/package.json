@@ -1,0 +1,12 @@
+﻿{
+  "name": "com.jnk.tinymathexpression",
+  "version": "1.0",
+  "displayName": "TinyMathExpression",
+  "description": "A simple math expression evaluator.",
+  "unity": "2020.3",
+  "author": {
+    "name": "Janik Helbig",
+    "email": "helbigjanik@gmail.com",
+    "url": "https://github.com/JanikHelbig"
+  }
+}
