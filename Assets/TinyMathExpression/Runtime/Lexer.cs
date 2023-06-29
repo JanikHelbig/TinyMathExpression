@@ -25,7 +25,7 @@ namespace Jnk.TinyMathExpression
                 }
 
                 if (TryParse(out Token token) == false)
-                    throw new Exception($"Error when parsing expression at index {_index}.");
+                    throw new Exception($"Error when parsing expression at position {_index}.");
 
                 tokens.Add(token);
             }

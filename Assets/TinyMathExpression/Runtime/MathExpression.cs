@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using UnityEngine.Assertions;
 
 namespace Jnk.TinyMathExpression
 {
@@ -8,8 +9,8 @@ namespace Jnk.TinyMathExpression
     {
         private readonly string _source;
         private readonly List<Instruction> _instructions;
-        private readonly Stack<double> _stack = new Stack<double>();
-        private readonly double[] _args;
+        private readonly int _requiredStackSize;
+        private readonly int _parameterCount;
 
         public MathExpression(string expression)
         {
@@ -17,7 +18,49 @@ namespace Jnk.TinyMathExpression
 
             List<Token> tokens = new Lexer().Tokenize(_source);
             _instructions = new Parser().BuildInstructions(tokens);
-            _args = new double[CountParameters(_instructions)];
+
+            _requiredStackSize = CalculateRequiredStackSize(_instructions);
+            _parameterCount = CountParameters(_instructions);
+        }
+
+        private static int CalculateRequiredStackSize(IReadOnlyList<Instruction> instructions)
+        {
+            var current = 0;
+            var max = 0;
+
+            foreach (var instruction in instructions)
+            {
+                switch (instruction.type)
+                {
+                    case InstructionType.Number:
+                    case InstructionType.Parameter:
+                        current++;
+                        break;
+                    case InstructionType.Add:
+                    case InstructionType.Sub:
+                    case InstructionType.Mul:
+                    case InstructionType.Div:
+                    case InstructionType.Pow:
+                        current--;
+                        break;
+                    case InstructionType.UnaryMinus:
+                    case InstructionType.Round:
+                    case InstructionType.Floor:
+                    case InstructionType.Ceil:
+                    case InstructionType.Sqrt:
+                    case InstructionType.Log:
+                    case InstructionType.Sin:
+                    case InstructionType.Cos:
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+
+                if (current > max)
+                    max = current;
+            }
+
+            return max;
         }
 
         private static int CountParameters(IReadOnlyList<Instruction> instructions)
@@ -30,38 +73,44 @@ namespace Jnk.TinyMathExpression
             return parameterCount;
         }
 
-        private double EvaluateInstructions()
+        private double EvaluateInstructions(ReadOnlySpan<double> args)
         {
-            _stack.Clear();
+            var stackTop = -1;
+            Span<double> stack = stackalloc double[_requiredStackSize];
 
-            foreach (Instruction instruction in _instructions)
-                _stack.Push(ExecuteInstruction(instruction));
+            foreach (var instruction in _instructions)
+            {
+                ExecuteInstruction(instruction, args, stack, ref stackTop);
+            }
 
-            return _stack.Pop();
+            Assert.AreEqual(0, stackTop);
+            return stack[0];
         }
 
-        private double ExecuteInstruction(Instruction instruction)
+        private static void ExecuteInstruction(Instruction instruction, ReadOnlySpan<double> args, Span<double> stack, ref int stackTop)
         {
-            return instruction.type switch
+            var result = instruction.type switch
             {
                 InstructionType.Number     => instruction.value,
-                InstructionType.Parameter  => _args[(int) instruction.value],
-                InstructionType.Add        => _stack.Pop() + _stack.Pop(),
-                InstructionType.Sub        => SubInv(_stack.Pop(), _stack.Pop()),
-                InstructionType.Mul        => _stack.Pop() * _stack.Pop(),
-                InstructionType.Div        => DivInv(_stack.Pop(), _stack.Pop()),
-                InstructionType.Pow        => PowInv(_stack.Pop(), _stack.Pop()),
-                InstructionType.UnaryMinus => -_stack.Pop(),
-                InstructionType.Round      => Math.Round(_stack.Pop()),
-                InstructionType.Floor      => Math.Floor(_stack.Pop()),
-                InstructionType.Ceil       => Math.Ceiling(_stack.Pop()),
-                InstructionType.Sqrt       => Math.Sqrt(_stack.Pop()),
-                InstructionType.Log        => Math.Log(_stack.Pop()),
-                InstructionType.Sin        => Math.Sin(_stack.Pop()),
-                InstructionType.Cos        => Math.Cos(_stack.Pop()),
+                InstructionType.Parameter  => args[(int) instruction.value],
+                InstructionType.Add        => stack[stackTop--] + stack[stackTop--],
+                InstructionType.Sub        => SubInv(stack[stackTop--], stack[stackTop--]),
+                InstructionType.Mul        => stack[stackTop--] * stack[stackTop--],
+                InstructionType.Div        => DivInv(stack[stackTop--], stack[stackTop--]),
+                InstructionType.Pow        => PowInv(stack[stackTop--], stack[stackTop--]),
+                InstructionType.UnaryMinus => -stack[stackTop--],
+                InstructionType.Round      => Math.Round(stack[stackTop--]),
+                InstructionType.Floor      => Math.Floor(stack[stackTop--]),
+                InstructionType.Ceil       => Math.Ceiling(stack[stackTop--]),
+                InstructionType.Sqrt       => Math.Sqrt(stack[stackTop--]),
+                InstructionType.Log        => Math.Log(stack[stackTop--]),
+                InstructionType.Sin        => Math.Sin(stack[stackTop--]),
+                InstructionType.Cos        => Math.Cos(stack[stackTop--]),
                 _ => throw new ArgumentOutOfRangeException(nameof(instruction.type),
                     $"Encountered unhandled instruction type: {instruction.type}")
             };
+
+            stack[++stackTop] = result;
 
             double SubInv(double b, double a) => a - b;
             double DivInv(double b, double a) => a / b;
@@ -72,129 +121,85 @@ namespace Jnk.TinyMathExpression
 
         public double Evaluate()
         {
-            AssertParameterCount(0);
-            return EvaluateInstructions();
+            var args = ReadOnlySpan<double>.Empty;
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg)
         {
-            AssertParameterCount(1);
-            _args[0] = arg;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1)
         {
-            AssertParameterCount(2);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2)
         {
-            AssertParameterCount(3);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3)
         {
-            AssertParameterCount(4);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4)
         {
-            AssertParameterCount(5);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4, double arg5)
         {
-            AssertParameterCount(6);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            _args[5] = arg5;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4, arg5 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4, double arg5, double arg6)
         {
-            AssertParameterCount(7);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            _args[5] = arg5;
-            _args[6] = arg6;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4, arg5, arg6 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4, double arg5, double arg6, double arg7)
         {
-            AssertParameterCount(8);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            _args[5] = arg5;
-            _args[6] = arg6;
-            _args[7] = arg7;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4, double arg5, double arg6, double arg7, double arg8)
         {
-            AssertParameterCount(9);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            _args[5] = arg5;
-            _args[6] = arg6;
-            _args[7] = arg7;
-            _args[8] = arg8;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
         public double Evaluate(double arg0, double arg1, double arg2, double arg3, double arg4, double arg5, double arg6, double arg7, double arg8, double arg9)
         {
-            AssertParameterCount(10);
-            _args[0] = arg0;
-            _args[1] = arg1;
-            _args[2] = arg2;
-            _args[3] = arg3;
-            _args[4] = arg4;
-            _args[5] = arg5;
-            _args[6] = arg6;
-            _args[7] = arg7;
-            _args[8] = arg8;
-            _args[9] = arg9;
-            return EvaluateInstructions();
+            ReadOnlySpan<double> args = stackalloc[] { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
+            AssertParameterCount(args);
+            return EvaluateInstructions(args);
         }
 
-        private void AssertParameterCount(int argumentCount)
+        private void AssertParameterCount(ReadOnlySpan<double> args)
         {
-            if (_args.Length != argumentCount)
-                throw new ArgumentException($"Number of provided arguments ({argumentCount}) does not match number of parameters ({_args.Length}).");
+            if (args.Length != _parameterCount)
+                throw new ArgumentException($"Number of provided arguments ({args.Length}) does not match number of parameters ({_parameterCount}).");
         }
 
         #endregion
@@ -203,7 +208,7 @@ namespace Jnk.TinyMathExpression
         {
             var stringBuilder = new StringBuilder();
 
-            foreach (Instruction instruction in _instructions)
+            foreach (var instruction in _instructions)
                 stringBuilder.Append(instruction.ToString()).Append(" ");
 
             return stringBuilder.ToString();
