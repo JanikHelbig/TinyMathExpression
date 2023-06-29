@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "displayName": "TinyMathExpression",
   "description": "A simple math expression evaluator.",
-  "unity": "2020.3",
+  "unity": "2021.3",
   "author": {
     "name": "Janik Helbig",
     "email": "helbigjanik@gmail.com",
