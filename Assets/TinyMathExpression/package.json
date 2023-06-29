@@ -1,6 +1,6 @@
 ﻿{
   "name": "com.jnk.tinymathexpression",
-  "version": "1.0",
+  "version": "1.0.1",
   "displayName": "TinyMathExpression",
   "description": "A simple math expression evaluator.",
   "unity": "2020.3",
