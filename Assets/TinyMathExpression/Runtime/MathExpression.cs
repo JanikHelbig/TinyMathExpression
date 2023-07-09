@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using UnityEngine;
 using UnityEngine.Assertions;
 
 namespace Jnk.TinyMathExpression
@@ -16,8 +17,8 @@ namespace Jnk.TinyMathExpression
         {
             _source = expression;
 
-            List<Token> tokens = new Lexer().Tokenize(_source);
-            _instructions = new Parser().BuildInstructions(tokens);
+            List<Token> tokens = Lexer.Tokenize(_source);
+            _instructions = Parser.BuildInstructions(tokens);
 
             _requiredStackSize = CalculateRequiredStackSize(_instructions);
             _parameterCount = CountParameters(_instructions);
@@ -30,7 +31,7 @@ namespace Jnk.TinyMathExpression
 
             foreach (var instruction in instructions)
             {
-                switch (instruction.type)
+                switch (instruction.Type)
                 {
                     case InstructionType.Number:
                     case InstructionType.Parameter:
@@ -65,23 +66,33 @@ namespace Jnk.TinyMathExpression
 
         private static int CountParameters(IReadOnlyList<Instruction> instructions)
         {
-            var parameterCount = 0;
-            for (var i = 0; i < instructions.Count; i++)
-                if (instructions[i].type == InstructionType.Parameter)
-                    parameterCount++;
+            uint mask = 0;
+            int count = 0;
 
-            return parameterCount;
+            for (var i = 0; i < instructions.Count; i++)
+            {
+                if (instructions[i].Type == InstructionType.Parameter)
+                {
+                    var index = (int) instructions[i].Value;
+
+                    if ((mask & 1u << index) > 0)
+                        continue;
+
+                    mask |= 1u << index;
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private double EvaluateInstructions(ReadOnlySpan<double> args)
         {
-            var stackTop = -1;
+            int stackTop = -1;
             Span<double> stack = stackalloc double[_requiredStackSize];
 
-            foreach (var instruction in _instructions)
-            {
+            foreach (Instruction instruction in _instructions)
                 ExecuteInstruction(instruction, args, stack, ref stackTop);
-            }
 
             Assert.AreEqual(0, stackTop);
             return stack[0];
@@ -89,10 +100,10 @@ namespace Jnk.TinyMathExpression
 
         private static void ExecuteInstruction(Instruction instruction, ReadOnlySpan<double> args, Span<double> stack, ref int stackTop)
         {
-            var result = instruction.type switch
+            double result = instruction.Type switch
             {
-                InstructionType.Number     => instruction.value,
-                InstructionType.Parameter  => args[(int) instruction.value],
+                InstructionType.Number     => instruction.Value,
+                InstructionType.Parameter  => args[(int) instruction.Value],
                 InstructionType.Add        => stack[stackTop--] + stack[stackTop--],
                 InstructionType.Sub        => SubInv(stack[stackTop--], stack[stackTop--]),
                 InstructionType.Mul        => stack[stackTop--] * stack[stackTop--],
@@ -106,8 +117,8 @@ namespace Jnk.TinyMathExpression
                 InstructionType.Log        => Math.Log(stack[stackTop--]),
                 InstructionType.Sin        => Math.Sin(stack[stackTop--]),
                 InstructionType.Cos        => Math.Cos(stack[stackTop--]),
-                _ => throw new ArgumentOutOfRangeException(nameof(instruction.type),
-                    $"Encountered unhandled instruction type: {instruction.type}")
+                _ => throw new ArgumentOutOfRangeException(nameof(instruction.Type),
+                    $"Encountered unhandled instruction type: {instruction.Type}")
             };
 
             stack[++stackTop] = result;
@@ -198,8 +209,11 @@ namespace Jnk.TinyMathExpression
 
         private void AssertParameterCount(ReadOnlySpan<double> args)
         {
-            if (args.Length != _parameterCount)
-                throw new ArgumentException($"Number of provided arguments ({args.Length}) does not match number of parameters ({_parameterCount}).");
+            if (args.Length < _parameterCount)
+                throw new ArgumentException($"Number of provided arguments ({args.Length}) is less than the number of parameters ({_parameterCount}) in expression '{_source}'.");
+
+            if (args.Length > _parameterCount)
+                Debug.LogWarning($"Number of provided arguments ({args.Length}) is more than the number of parameters ({_parameterCount}) in expression '{_source}'.");
         }
 
         #endregion

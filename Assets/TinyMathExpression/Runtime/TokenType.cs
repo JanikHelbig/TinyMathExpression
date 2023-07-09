@@ -14,7 +14,7 @@ namespace Jnk.TinyMathExpression
 
         OpenParenthesis,
         ClosedParenthesis,
-        Semicolon,
+        Comma,
 
         Round,
         Floor,
@@ -56,7 +56,7 @@ namespace Jnk.TinyMathExpression
                 TokenType.Pow => "^",
                 TokenType.OpenParenthesis => "(",
                 TokenType.ClosedParenthesis => ")",
-                TokenType.Semicolon => ";",
+                TokenType.Comma => ";",
                 TokenType.Round => "Round",
                 TokenType.Floor => "Floor",
                 TokenType.Ceil => "Ceil",

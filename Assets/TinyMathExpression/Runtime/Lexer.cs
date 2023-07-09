@@ -4,28 +4,23 @@ using System.Globalization;
 
 namespace Jnk.TinyMathExpression
 {
-    public struct Lexer
+    public static class Lexer
     {
-        private int _index;
-        private string _expression;
-
-        public List<Token> Tokenize(string expression)
+        public static List<Token> Tokenize(string expression)
         {
-            _index = 0;
-            _expression = expression;
-
+            var index = 0;
             var tokens = new List<Token>(8);
 
-            while (_index < _expression.Length)
+            while (index < expression.Length)
             {
-                if (_expression[_index] == ' ')
+                if (expression[index] == ' ')
                 {
-                    _index++;
+                    index++;
                     continue;
                 }
 
-                if (TryParse(out Token token) == false)
-                    throw new Exception($"Error when parsing expression at position {_index}.");
+                if (TryParse(expression, ref index, out Token token) == false)
+                    throw new ArgumentException($"Error when parsing expression '{expression}' after '{expression[..index]}'.");
 
                 tokens.Add(token);
             }
@@ -34,21 +29,20 @@ namespace Jnk.TinyMathExpression
             return tokens;
         }
 
-        private bool TryParse(out Token token)
+        private static bool TryParse(string expression, ref int index, out Token token)
         {
             token = default;
-
-            return TryParseOperator(out token) ||
-                   TryParseSeparator(out token) ||
-                   TryParseKeyword(out token) ||
-                   TryParseLiteral(out token) ||
-                   TryParseConstant(out token) ||
-                   TryParseIdentifier(out token);
+            return TryParseOperator(expression, ref index, out token) ||
+                   TryParseSeparator(expression, ref index, out token) ||
+                   TryParseKeyword(expression, ref index, out token) ||
+                   TryParseLiteral(expression, ref index, out token) ||
+                   TryParseConstant(expression, ref index, out token) ||
+                   TryParseIdentifier(expression, ref index, out token);
         }
 
-        private bool TryParseOperator(out Token token)
+        private static bool TryParseOperator(string expression, ref int index, out Token token)
         {
-            token = new Token(_expression[_index] switch
+            token = new Token(expression[index] switch
             {
                 '+' => TokenType.Plus,
                 '-' => TokenType.Minus,
@@ -61,37 +55,36 @@ namespace Jnk.TinyMathExpression
             if (token.type == TokenType.None)
                 return false;
 
-            _index++;
+            index++;
             return true;
         }
 
-        private bool TryParseSeparator(out Token token)
+        private static bool TryParseSeparator(string expression, ref int index, out Token token)
         {
-            token = new Token(_expression[_index] switch
+            token = new Token(expression[index] switch
             {
                 '(' => TokenType.OpenParenthesis,
                 ')' => TokenType.ClosedParenthesis,
-                ',' => TokenType.Semicolon,
+                ',' => TokenType.Comma,
                 _   => TokenType.None
             });
 
             if (token.type == TokenType.None)
                 return false;
 
-            _index++;
+            index++;
             return true;
         }
 
-        private bool TryParseKeyword(out Token token)
+        private static bool TryParseKeyword(string expression, ref int index, out Token token)
         {
             var length = 0;
-            while (_index + length < _expression.Length &&
-                   _expression[_index + length] >= 'a' &&
-                   _expression[_index + length] <= 'z')
+            while (index + length < expression.Length &&
+                   expression[index + length] >= 'a' &&
+                   expression[index + length] <= 'z')
                 length++;
 
-            string word = string.Intern(_expression.Substring(_index, length));
-
+            string word = string.Intern(expression.Substring(index, length));
             token = new Token(word switch
             {
                 "round" => TokenType.Round,
@@ -107,20 +100,20 @@ namespace Jnk.TinyMathExpression
             if (token.type == TokenType.None)
                 return false;
 
-            _index += word.Length;
+            index += length;
             return true;
         }
 
-        private bool TryParseLiteral(out Token token)
+        private static bool TryParseLiteral(string expression, ref int index, out Token token)
         {
             var length = 0;
-            while (_index + length < _expression.Length && (
-                       _expression[_index + length] >= '0' &&
-                       _expression[_index + length] <= '9' ||
-                       _expression[_index + length] == '.'))
+            while (index + length < expression.Length && (
+                       expression[index + length] >= '0' &&
+                       expression[index + length] <= '9' ||
+                       expression[index + length] == '.'))
                 length++;
 
-            string number = _expression.Substring(_index, length);
+            string number = expression.Substring(index, length);
 
             const NumberStyles styles = NumberStyles.Float;
             if (double.TryParse(number, styles, CultureInfo.InvariantCulture, out double value) == false)
@@ -130,19 +123,19 @@ namespace Jnk.TinyMathExpression
             }
 
             token = new Token(TokenType.Literal, value);
-            _index += number.Length;
+            index += length;
             return true;
         }
 
-        private bool TryParseConstant(out Token token)
+        private static bool TryParseConstant(string expression, ref int index, out Token token)
         {
             var length = 0;
-            while (_index + length < _expression.Length &&
-                   _expression[_index + length] >= 'A' &&
-                   _expression[_index + length] <= 'Z')
+            while (index + length < expression.Length &&
+                   expression[index + length] >= 'A' &&
+                   expression[index + length] <= 'Z')
                 length++;
 
-            string word = string.Intern(_expression.Substring(_index, length));
+            string word = string.Intern(expression.Substring(index, length));
 
             token = new Token(word switch
             {
@@ -155,16 +148,16 @@ namespace Jnk.TinyMathExpression
             if (token.type == TokenType.None)
                 return false;
 
-            _index += word.Length;
+            index += length;
             return true;
         }
 
-        private bool TryParseIdentifier(out Token token)
+        private static bool TryParseIdentifier(string expr, ref int index, out Token token)
         {
-            bool isIdentifier = _expression[_index] == '{' &&
-                                _expression[_index + 1] >= '0' &&
-                                _expression[_index + 1] <= '9' &&
-                                _expression[_index + 2] == '}';
+            bool isIdentifier = expr[index] == '{' &&
+                                expr[index + 1] >= '0' &&
+                                expr[index + 1] <= '9' &&
+                                expr[index + 2] == '}';
 
             if (isIdentifier == false)
             {
@@ -172,9 +165,9 @@ namespace Jnk.TinyMathExpression
                 return false;
             }
 
-            int value = _expression[_index + 1] - '0';
+            int value = expr[index + 1] - '0';
             token = new Token(TokenType.Parameter, value);
-            _index += 3;
+            index += 3;
             return true;
         }
     }

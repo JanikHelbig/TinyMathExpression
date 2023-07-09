@@ -23,27 +23,27 @@ namespace Jnk.TinyMathExpression
 
     public readonly struct Instruction
     {
-        public readonly InstructionType type;
-        public readonly double value;
+        public readonly InstructionType Type;
+        public readonly double Value;
 
         private Instruction(InstructionType type, double value)
         {
-            this.type = type;
-            this.value = value;
+            Type = type;
+            Value = value;
         }
 
         public override string ToString()
         {
-            return type switch
+            return Type switch
             {
-                InstructionType.Number => value.ToString(CultureInfo.InvariantCulture),
-                InstructionType.Parameter => $"{{{value}}}",
-                _ => type.ToString()
+                InstructionType.Number => Value.ToString(CultureInfo.InvariantCulture),
+                InstructionType.Parameter => $"{{{Value}}}",
+                _ => Type.ToString()
             };
         }
 
-        public static Instruction FromOperator(InstructionType type) => new Instruction(type, 0);
-        public static Instruction FromNumber(double value) => new Instruction(InstructionType.Number, value);
-        public static Instruction FromParameter(int index) => new Instruction(InstructionType.Parameter, index);
+        public static Instruction FromOperator(InstructionType type) => new(type, 0);
+        public static Instruction FromNumber(double value) => new(InstructionType.Number, value);
+        public static Instruction FromParameter(char index) => new(InstructionType.Parameter, index);
     }
 }
