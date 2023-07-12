@@ -35,18 +35,18 @@ namespace Jnk.TinyMathExpression
 
     public readonly struct Token
     {
-        public readonly TokenType type;
-        public readonly double value;
+        public readonly TokenType Type;
+        public readonly double Value;
 
         public Token(TokenType type, double value = 0)
         {
-            this.type = type;
-            this.value = value;
+            Type = type;
+            Value = value;
         }
 
         public string GetValueString()
         {
-            return type switch
+            return Type switch
             {
                 TokenType.None => "NONE",
                 TokenType.Plus => "+",

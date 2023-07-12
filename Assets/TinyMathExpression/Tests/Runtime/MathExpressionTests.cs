@@ -1,7 +1,5 @@
-﻿using System;
-using Jnk.TinyMathExpression;
+﻿using Jnk.TinyMathExpression;
 using NUnit.Framework;
-using UnityEngine;
 using UnityEngine.TestTools.Constraints;
 using Is = NUnit.Framework.Is;
 

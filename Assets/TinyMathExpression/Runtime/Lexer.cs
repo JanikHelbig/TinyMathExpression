@@ -1,48 +1,57 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 
 namespace Jnk.TinyMathExpression
 {
-    public static class Lexer
+    public ref struct Lexer
     {
-        public static List<Token> Tokenize(string expression)
+        private int _index;
+        private readonly ReadOnlySpan<char> _expression;
+        private readonly Span<Token> _buffer;
+
+        public Lexer(ReadOnlySpan<char> expression, Span<Token> buffer)
         {
-            var index = 0;
-            var tokens = new List<Token>(8);
+            _index = 0;
+            _expression = expression;
+            _buffer = buffer;
 
-            while (index < expression.Length)
+            if (_buffer.Length < expression.Length)
+                throw new ArgumentException("The result buffer needs to have at least the same length as the expression.", nameof(_buffer));
+        }
+
+        public int Tokenize()
+        {
+            _index = 0;
+
+            var bufferIndex = 0;
+            while (_index < _expression.Length)
             {
-                if (expression[index] == ' ')
-                {
-                    index++;
-                    continue;
-                }
+                while (_expression[_index] == ' ')
+                    _index++;
 
-                if (TryParse(expression, ref index, out Token token) == false)
-                    throw new ArgumentException($"Error when parsing expression '{expression}' after '{expression[..index]}'.");
+                ref Token token = ref _buffer[bufferIndex++];
 
-                tokens.Add(token);
+                if (!TryParse(ref token))
+                    throw new ArgumentException($"Error when parsing expression '{_expression.ToString()}' after '{_expression[.._index].ToString()}'.");
             }
 
-            tokens.Add(new Token(TokenType.EndOfText));
-            return tokens;
+            _buffer[bufferIndex++] = new Token(TokenType.EndOfText);
+            return bufferIndex;
         }
 
-        private static bool TryParse(string expression, ref int index, out Token token)
+        private bool TryParse(ref Token token)
         {
-            token = default;
-            return TryParseOperator(expression, ref index, out token) ||
-                   TryParseSeparator(expression, ref index, out token) ||
-                   TryParseKeyword(expression, ref index, out token) ||
-                   TryParseLiteral(expression, ref index, out token) ||
-                   TryParseConstant(expression, ref index, out token) ||
-                   TryParseIdentifier(expression, ref index, out token);
+            return TryParseOperator(ref token)
+                || TryParseSeparator(ref token)
+                || TryParseKeyword(ref token)
+                || TryParseLiteral(ref token)
+                || TryParseConstant(ref token)
+                || TryParseIdentifier(ref token);
         }
 
-        private static bool TryParseOperator(string expression, ref int index, out Token token)
+        private bool TryParseOperator(ref Token token)
         {
-            token = new Token(expression[index] switch
+            TokenType tokenType = _expression[_index] switch
             {
                 '+' => TokenType.Plus,
                 '-' => TokenType.Minus,
@@ -50,124 +59,119 @@ namespace Jnk.TinyMathExpression
                 '/' => TokenType.Div,
                 '^' => TokenType.Pow,
                 _   => TokenType.None
-            });
+            };
 
-            if (token.type == TokenType.None)
+            if (tokenType == TokenType.None)
                 return false;
 
-            index++;
+            token = new Token(tokenType);
+            _index++;
             return true;
         }
 
-        private static bool TryParseSeparator(string expression, ref int index, out Token token)
+        private bool TryParseSeparator(ref Token token)
         {
-            token = new Token(expression[index] switch
+            TokenType tokenType = _expression[_index] switch
             {
                 '(' => TokenType.OpenParenthesis,
                 ')' => TokenType.ClosedParenthesis,
                 ',' => TokenType.Comma,
                 _   => TokenType.None
-            });
+            };
 
-            if (token.type == TokenType.None)
+            if (tokenType == TokenType.None)
                 return false;
 
-            index++;
+            token = new Token(tokenType);
+            _index++;
             return true;
         }
 
-        private static bool TryParseKeyword(string expression, ref int index, out Token token)
+        private bool TryParseKeyword(ref Token token)
         {
             var length = 0;
-            while (index + length < expression.Length &&
-                   expression[index + length] >= 'a' &&
-                   expression[index + length] <= 'z')
+            while (_index + length < _expression.Length &&
+                   _expression[_index + length] >= 'a' &&
+                   _expression[_index + length] <= 'z')
                 length++;
 
-            string word = string.Intern(expression.Substring(index, length));
-            token = new Token(word switch
+            var word = _expression.Slice(_index, length).ToString();
+            TokenType tokenType = word switch
             {
                 "round" => TokenType.Round,
                 "floor" => TokenType.Floor,
-                "ceil"  => TokenType.Ceil,
-                "sqrt"  => TokenType.Sqrt,
-                "log"   => TokenType.Log,
-                "sin"   => TokenType.Sin,
-                "cos"   => TokenType.Cos,
-                _       => TokenType.None
-            });
+                "ceil" => TokenType.Ceil,
+                "sqrt" => TokenType.Sqrt,
+                "log" => TokenType.Log,
+                "sin" => TokenType.Sin,
+                "cos" => TokenType.Cos,
+                _ => TokenType.None
+            };
 
-            if (token.type == TokenType.None)
+            if (tokenType == TokenType.None)
                 return false;
 
-            index += length;
+            token = new Token(tokenType);
+            _index += length;
             return true;
         }
 
-        private static bool TryParseLiteral(string expression, ref int index, out Token token)
+        private bool TryParseLiteral(ref Token token)
         {
             var length = 0;
-            while (index + length < expression.Length && (
-                       expression[index + length] >= '0' &&
-                       expression[index + length] <= '9' ||
-                       expression[index + length] == '.'))
+            while (_index + length < _expression.Length && (
+                       _expression[_index + length] >= '0' &&
+                       _expression[_index + length] <= '9' ||
+                       _expression[_index + length] == '.'))
                 length++;
 
-            string number = expression.Substring(index, length);
-
-            const NumberStyles styles = NumberStyles.Float;
-            if (double.TryParse(number, styles, CultureInfo.InvariantCulture, out double value) == false)
-            {
-                token = default;
+            ReadOnlySpan<char> number = _expression.Slice(_index, length);
+            if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
                 return false;
-            }
 
             token = new Token(TokenType.Literal, value);
-            index += length;
+            _index += length;
             return true;
         }
 
-        private static bool TryParseConstant(string expression, ref int index, out Token token)
+        private bool TryParseConstant(ref Token token)
         {
             var length = 0;
-            while (index + length < expression.Length &&
-                   expression[index + length] >= 'A' &&
-                   expression[index + length] <= 'Z')
+            while (_index + length < _expression.Length &&
+                   _expression[_index + length] >= 'A' &&
+                   _expression[_index + length] <= 'Z')
                 length++;
 
-            string word = string.Intern(expression.Substring(index, length));
-
-            token = new Token(word switch
+            var word = _expression.Slice(_index, length).ToString();
+            TokenType tokenType = word switch
             {
-                "PI"  => TokenType.PI,
+                "PI" => TokenType.PI,
                 "TAU" => TokenType.TAU,
-                "E"   => TokenType.E,
-                _     => TokenType.None
-            });
+                "E" => TokenType.E,
+                _ => TokenType.None
+            };
 
-            if (token.type == TokenType.None)
+            if (tokenType == TokenType.None)
                 return false;
 
-            index += length;
+            token = new Token(tokenType);
+            _index += length;
             return true;
         }
 
-        private static bool TryParseIdentifier(string expr, ref int index, out Token token)
+        private bool TryParseIdentifier(ref Token token)
         {
-            bool isIdentifier = expr[index] == '{' &&
-                                expr[index + 1] >= '0' &&
-                                expr[index + 1] <= '9' &&
-                                expr[index + 2] == '}';
+            bool isIdentifier = _expression[_index] == '{' &&
+                                _expression[_index + 1] >= '0' &&
+                                _expression[_index + 1] <= '9' &&
+                                _expression[_index + 2] == '}';
 
-            if (isIdentifier == false)
-            {
-                token = default;
+            if (!isIdentifier)
                 return false;
-            }
 
-            int value = expr[index + 1] - '0';
+            int value = _expression[_index + 1] - '0';
             token = new Token(TokenType.Parameter, value);
-            index += 3;
+            _index += 3;
             return true;
         }
     }

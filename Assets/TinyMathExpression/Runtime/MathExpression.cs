@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Assertions;
@@ -9,29 +8,36 @@ namespace Jnk.TinyMathExpression
     public class MathExpression
     {
         private readonly string _source;
-        private readonly List<Instruction> _instructions;
-        private readonly int _requiredStackSize;
         private readonly int _parameterCount;
+        private readonly int _requiredStackSize;
+        private readonly Instruction[] _instructions;
 
         public MathExpression(string expression)
         {
             _source = expression;
 
-            List<Token> tokens = Lexer.Tokenize(_source);
-            _instructions = Parser.BuildInstructions(tokens);
+            Span<Token> tokenBuffer = stackalloc Token[expression.Length];
+            int tokenCount = new Lexer(expression, tokenBuffer).Tokenize();
 
-            _requiredStackSize = CalculateRequiredStackSize(_instructions);
-            _parameterCount = CountParameters(_instructions);
+            Span<Instruction> instructionBuffer = stackalloc Instruction[tokenCount];
+            int instructionCount = new Parser(tokenBuffer, instructionBuffer).BuildInstructions();
+
+            ReadOnlySpan<Instruction> instructions = instructionBuffer[..instructionCount];
+
+            _parameterCount = CountParameters(instructions);
+            _requiredStackSize = CalculateRequiredStackSize(instructions);
+
+            _instructions = instructions.ToArray();
         }
 
-        private static int CalculateRequiredStackSize(IReadOnlyList<Instruction> instructions)
+        private static int CalculateRequiredStackSize(ReadOnlySpan<Instruction> instructions)
         {
             var current = 0;
             var max = 0;
 
-            foreach (var instruction in instructions)
+            for (var i = 0; i < instructions.Length; i++)
             {
-                switch (instruction.Type)
+                switch (instructions[i].Type)
                 {
                     case InstructionType.Number:
                     case InstructionType.Parameter:
@@ -64,12 +70,12 @@ namespace Jnk.TinyMathExpression
             return max;
         }
 
-        private static int CountParameters(IReadOnlyList<Instruction> instructions)
+        private static int CountParameters(ReadOnlySpan<Instruction> instructions)
         {
             uint mask = 0;
             int count = 0;
 
-            for (var i = 0; i < instructions.Count; i++)
+            for (var i = 0; i < instructions.Length; i++)
             {
                 if (instructions[i].Type == InstructionType.Parameter)
                 {
@@ -222,7 +228,7 @@ namespace Jnk.TinyMathExpression
         {
             var stringBuilder = new StringBuilder();
 
-            foreach (var instruction in _instructions)
+            foreach (Instruction instruction in _instructions)
                 stringBuilder.Append(instruction.ToString()).Append(" ");
 
             return stringBuilder.ToString();
