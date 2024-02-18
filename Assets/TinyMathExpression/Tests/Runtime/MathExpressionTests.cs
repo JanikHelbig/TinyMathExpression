@@ -30,11 +30,14 @@ namespace TinyMathExpressions.Tests.Runtime
         [TestCase("(3 * 4) - 5", 7)]
         [TestCase("3 * (4 - 5)", -3)]
         [TestCase("10 - 5 - 2", 3)]
+        [TestCase("10 - (5 - 2)", 7)]
         [TestCase("16 / 4 / 2", 2)]
+        [TestCase("16 / (4 / 2)", 8)]
+        [TestCase("cos(-PI)", -1)]
+        [TestCase("-cos(PI)", 1)]
         public static void Evaluate_ReturnsCorrectValue(string expression, double expected)
         {
             var expr = new MathExpression(expression);
-            Debug.Log(expr.ToInstructionString());
             double actual = expr.Evaluate();
 
             Assert.That(actual, Is.EqualTo(expected));

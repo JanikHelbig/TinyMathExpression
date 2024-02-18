@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 
 namespace Jnk.TinyMathExpression
 {
@@ -33,9 +32,7 @@ namespace Jnk.TinyMathExpression
                 while (_expression[_index] == ' ')
                     _index++;
 
-                ref Token<T> token = ref _buffer[bufferIndex++];
-
-                if (!TryParse(ref token))
+                if (!TryParse(ref _buffer[bufferIndex++]))
                     throw new ArgumentException($"Error when parsing expression '{_expression.ToString()}' after '{_expression[.._index].ToString()}'.");
             }
 
