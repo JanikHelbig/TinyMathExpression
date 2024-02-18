@@ -15,6 +15,8 @@ namespace Jnk.TinyMathExpression
 
         private readonly TOperationHandler _handler;
 
+        private readonly TokenType CurrentToken => _tokens[_tokenIndex].Type;
+
         public Parser(ReadOnlySpan<Token<T>> tokens, Span<Instruction<T>> buffer, TOperationHandler handler)
         {
             _tokenIndex = 0;
@@ -40,77 +42,82 @@ namespace Jnk.TinyMathExpression
         private void Expression()
         {
             Term();
-            Expression1();
+            while (OptionalTerm()) { }
         }
 
-        private void Expression1()
+        private bool OptionalTerm()
         {
-            switch (_tokens[_tokenIndex].Type)
+            switch (CurrentToken)
             {
                 case TokenType.Plus:
-                    GetNextToken();
+                    ConsumeToken();
                     Term();
-                    Expression1();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.Add));
-                    break;
+                    return true;
 
                 case TokenType.Minus:
-                    GetNextToken();
+                    ConsumeToken();
                     Term();
-                    Expression1();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.Sub));
-                    break;
+                    return true;
+
+                default:
+                    return false;
             }
         }
+
 
         private void Term()
         {
             Factor();
-            Term1();
+            while (OptionalFactor()) { }
         }
 
-        private void Term1()
+        private bool OptionalFactor()
         {
-            switch (_tokens[_tokenIndex].Type)
+            switch (CurrentToken)
             {
                 case TokenType.Mul:
-                    GetNextToken();
+                    ConsumeToken();
                     Factor();
-                    Term1();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.Mul));
-                    break;
+                    return true;
 
                 case TokenType.Div:
-                    GetNextToken();
+                    ConsumeToken();
                     Factor();
-                    Term1();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.Div));
-                    break;
+                    return true;
+
+                default:
+                    return false;
             }
         }
 
         private void Factor()
         {
             Potential();
-            Factor1();
+            while (OptionalPotential()) { }
         }
 
-        private void Factor1()
+        private bool OptionalPotential()
         {
-            switch (_tokens[_tokenIndex].Type)
+            switch (CurrentToken)
             {
                 case TokenType.Pow:
-                    GetNextToken();
+                    ConsumeToken();
                     Potential();
-                    Factor1();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.Pow));
-                    break;
+                    return true;
+
+                default:
+                    return false;
             }
         }
 
         private void Potential()
         {
-            TokenType tokenType = _tokens[_tokenIndex].Type;
+            TokenType tokenType = CurrentToken;
 
             switch (tokenType)
             {
@@ -121,7 +128,7 @@ namespace Jnk.TinyMathExpression
                 case TokenType.Log:
                 case TokenType.Cos:
                 case TokenType.Sin:
-                    GetNextToken();
+                    ConsumeToken();
                     MatchType(TokenType.OpenParenthesis);
                     Expression();
                     MatchType(TokenType.ClosedParenthesis);
@@ -140,61 +147,61 @@ namespace Jnk.TinyMathExpression
 
                 case TokenType.PI:
                     AddInstruction(Instruction<T>.FromNumber(_handler.PI));
-                    GetNextToken();
+                    ConsumeToken();
                     break;
 
                 case TokenType.TAU:
                     AddInstruction(Instruction<T>.FromNumber(_handler.TAU));
-                    GetNextToken();
+                    ConsumeToken();
                     break;
 
                 case TokenType.E:
                     AddInstruction(Instruction<T>.FromNumber(_handler.E));
-                    GetNextToken();
+                    ConsumeToken();
                     break;
 
                 case TokenType.OpenParenthesis:
-                    GetNextToken();
+                    ConsumeToken();
                     Expression();
                     MatchType(TokenType.ClosedParenthesis);
                     break;
 
                 case TokenType.Minus:
-                    GetNextToken();
+                    ConsumeToken();
                     Expression();
                     AddInstruction(Instruction<T>.FromOperator(InstructionType.UnaryMinus));
                     break;
 
                 case TokenType.Literal:
                     AddInstruction(Instruction<T>.FromNumber(_tokens[_tokenIndex].Value));
-                    GetNextToken();
+                    ConsumeToken();
                     break;
 
                 case >= TokenType.Parameter0 and <= TokenType.Parameter9:
                     AddInstruction(Instruction<T>.FromOperator((InstructionType)tokenType));
-                    GetNextToken();
+                    ConsumeToken();
                     break;
 
                 default:
                     string tokenString = GetTokenString(_tokens, _tokenIndex);
-                    throw new ArgumentException($"Error in expression. Unexpected token '{_tokens[_tokenIndex].Type}' after '{tokenString}'.");
+                    throw new ArgumentException($"Error in expression. Unexpected token '{CurrentToken}' after '{tokenString}'.");
             }
         }
 
         private void MatchType(TokenType tokenType)
         {
-            if (_tokens[_tokenIndex].Type != tokenType)
+            if (CurrentToken != tokenType)
             {
                 string tokenString = GetTokenString(_tokens, _tokenIndex);
-                throw new ArgumentException($"Error in expression. Unexpected token '{_tokens[_tokenIndex].Type}' after '{tokenString}', expected '{tokenType}'.");
+                throw new ArgumentException($"Error in expression. Unexpected token '{CurrentToken}' after '{tokenString}', expected '{tokenType}'.");
             }
 
-            GetNextToken();
+            ConsumeToken();
         }
 
-        private void GetNextToken()
+        private void ConsumeToken()
         {
-            if (++_tokenIndex > _tokens.Length && _tokens[_tokenIndex].Type != TokenType.EndOfText)
+            if (++_tokenIndex > _tokens.Length && CurrentToken != TokenType.EndOfText)
                 throw new ArgumentException("End of tokens reached but expected more.");
         }
 
