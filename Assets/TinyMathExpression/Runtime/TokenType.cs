@@ -4,6 +4,17 @@ namespace Jnk.TinyMathExpression
 {
     public enum TokenType
     {
+        Parameter0 = 0,
+        Parameter1 = 1,
+        Parameter2 = 2,
+        Parameter3 = 3,
+        Parameter4 = 4,
+        Parameter5 = 5,
+        Parameter6 = 6,
+        Parameter7 = 7,
+        Parameter8 = 8,
+        Parameter9 = 9,
+
         None,
 
         Plus,
@@ -29,16 +40,32 @@ namespace Jnk.TinyMathExpression
         E,
 
         Literal,
-        Parameter,
         EndOfText,
     }
 
-    public readonly struct Token
+    public static class TokenTypeUtility
+    {
+        public static readonly TokenType[] ParameterLookup =
+        {
+            TokenType.Parameter0,
+            TokenType.Parameter1,
+            TokenType.Parameter2,
+            TokenType.Parameter3,
+            TokenType.Parameter4,
+            TokenType.Parameter5,
+            TokenType.Parameter6,
+            TokenType.Parameter7,
+            TokenType.Parameter8,
+            TokenType.Parameter9,
+        };
+    }
+
+    public readonly struct Token<T> where T : unmanaged
     {
         public readonly TokenType Type;
-        public readonly double Value;
+        public readonly T Value;
 
-        public Token(TokenType type, double value = 0)
+        public Token(TokenType type, T value = default)
         {
             Type = type;
             Value = value;
@@ -65,7 +92,16 @@ namespace Jnk.TinyMathExpression
                 TokenType.Sin => "Sin",
                 TokenType.Cos => "Cos",
                 TokenType.Literal => "Literal",
-                TokenType.Parameter => "Parameter",
+                TokenType.Parameter0 => "Parameter0",
+                TokenType.Parameter1 => "Parameter1",
+                TokenType.Parameter2 => "Parameter2",
+                TokenType.Parameter3 => "Parameter3",
+                TokenType.Parameter4 => "Parameter4",
+                TokenType.Parameter5 => "Parameter5",
+                TokenType.Parameter6 => "Parameter6",
+                TokenType.Parameter7 => "Parameter7",
+                TokenType.Parameter8 => "Parameter8",
+                TokenType.Parameter9 => "Parameter9",
                 TokenType.EndOfText => "EndOfText",
                 _ => throw new ArgumentOutOfRangeException()
             };

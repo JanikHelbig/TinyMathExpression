@@ -3,21 +3,27 @@ using System.Text;
 
 namespace Jnk.TinyMathExpression
 {
-    public ref struct Parser
+    public ref struct Parser<T, TOperationHandler>
+        where T : unmanaged
+        where TOperationHandler : unmanaged, IOperationHandler<T>
     {
         private int _tokenIndex;
-        private readonly ReadOnlySpan<Token> _tokens;
+        private readonly ReadOnlySpan<Token<T>> _tokens;
 
         private int _bufferIndex;
-        private readonly Span<Instruction> _buffer;
+        private readonly Span<Instruction<T>> _buffer;
 
-        public Parser(ReadOnlySpan<Token> tokens, Span<Instruction> buffer)
+        private readonly TOperationHandler _handler;
+
+        public Parser(ReadOnlySpan<Token<T>> tokens, Span<Instruction<T>> buffer, TOperationHandler handler)
         {
             _tokenIndex = 0;
             _tokens = tokens;
 
             _bufferIndex = 0;
             _buffer = buffer;
+
+            _handler = handler;
         }
 
         public int BuildInstructions()
@@ -26,7 +32,7 @@ namespace Jnk.TinyMathExpression
             return _bufferIndex;
         }
 
-        private void AddInstruction(Instruction instruction)
+        private void AddInstruction(Instruction<T> instruction)
         {
             _buffer[_bufferIndex++] = instruction;
         }
@@ -45,14 +51,14 @@ namespace Jnk.TinyMathExpression
                     GetNextToken();
                     Term();
                     Expression1();
-                    AddInstruction(Instruction.FromOperator(InstructionType.Add));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.Add));
                     break;
 
                 case TokenType.Minus:
                     GetNextToken();
                     Term();
                     Expression1();
-                    AddInstruction(Instruction.FromOperator(InstructionType.Sub));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.Sub));
                     break;
             }
         }
@@ -71,14 +77,14 @@ namespace Jnk.TinyMathExpression
                     GetNextToken();
                     Factor();
                     Term1();
-                    AddInstruction(Instruction.FromOperator(InstructionType.Mul));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.Mul));
                     break;
 
                 case TokenType.Div:
                     GetNextToken();
                     Factor();
                     Term1();
-                    AddInstruction(Instruction.FromOperator(InstructionType.Div));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.Div));
                     break;
             }
         }
@@ -97,14 +103,16 @@ namespace Jnk.TinyMathExpression
                     GetNextToken();
                     Potential();
                     Factor1();
-                    AddInstruction(Instruction.FromOperator(InstructionType.Pow));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.Pow));
                     break;
             }
         }
 
         private void Potential()
         {
-            switch (_tokens[_tokenIndex].Type)
+            TokenType tokenType = _tokens[_tokenIndex].Type;
+
+            switch (tokenType)
             {
                 case TokenType.Round:
                 case TokenType.Floor:
@@ -113,12 +121,11 @@ namespace Jnk.TinyMathExpression
                 case TokenType.Log:
                 case TokenType.Cos:
                 case TokenType.Sin:
-                    TokenType tokenType = _tokens[_tokenIndex].Type;
                     GetNextToken();
                     MatchType(TokenType.OpenParenthesis);
                     Expression();
                     MatchType(TokenType.ClosedParenthesis);
-                    AddInstruction(Instruction.FromOperator(tokenType switch
+                    AddInstruction(Instruction<T>.FromOperator(tokenType switch
                     {
                         TokenType.Round => InstructionType.Round,
                         TokenType.Floor => InstructionType.Floor,
@@ -132,17 +139,17 @@ namespace Jnk.TinyMathExpression
                     break;
 
                 case TokenType.PI:
-                    AddInstruction(Instruction.FromNumber(Math.PI));
+                    AddInstruction(Instruction<T>.FromNumber(_handler.PI));
                     GetNextToken();
                     break;
 
                 case TokenType.TAU:
-                    AddInstruction(Instruction.FromNumber(2 * Math.PI));
+                    AddInstruction(Instruction<T>.FromNumber(_handler.TAU));
                     GetNextToken();
                     break;
 
                 case TokenType.E:
-                    AddInstruction(Instruction.FromNumber(Math.E));
+                    AddInstruction(Instruction<T>.FromNumber(_handler.E));
                     GetNextToken();
                     break;
 
@@ -155,16 +162,16 @@ namespace Jnk.TinyMathExpression
                 case TokenType.Minus:
                     GetNextToken();
                     Expression();
-                    AddInstruction(Instruction.FromOperator(InstructionType.UnaryMinus));
+                    AddInstruction(Instruction<T>.FromOperator(InstructionType.UnaryMinus));
                     break;
 
                 case TokenType.Literal:
-                    AddInstruction(Instruction.FromNumber(_tokens[_tokenIndex].Value));
+                    AddInstruction(Instruction<T>.FromNumber(_tokens[_tokenIndex].Value));
                     GetNextToken();
                     break;
 
-                case TokenType.Parameter:
-                    AddInstruction(Instruction.FromParameter((char) _tokens[_tokenIndex].Value));
+                case >= TokenType.Parameter0 and <= TokenType.Parameter9:
+                    AddInstruction(Instruction<T>.FromOperator((InstructionType)tokenType));
                     GetNextToken();
                     break;
 
@@ -191,7 +198,7 @@ namespace Jnk.TinyMathExpression
                 throw new ArgumentException("End of tokens reached but expected more.");
         }
 
-        private static string GetTokenString(ReadOnlySpan<Token> tokens, int index = -1)
+        private static string GetTokenString(ReadOnlySpan<Token<T>> tokens, int index = -1)
         {
             var builder = new StringBuilder();
 
@@ -200,7 +207,7 @@ namespace Jnk.TinyMathExpression
                 if (index > 0 && index <= i)
                     return builder.ToString();
 
-                Token token = tokens[i];
+                Token<T> token = tokens[i];
                 switch (token.Type)
                 {
                     case TokenType.None:
@@ -263,10 +270,11 @@ namespace Jnk.TinyMathExpression
                     case TokenType.Literal:
                         builder.Append(token.Value);
                         break;
-                    case TokenType.Parameter:
-                        builder.Append('{').Append((int)token.Value).Append('}');
+                    case >= TokenType.Parameter0 and <= TokenType.Parameter9:
+                        builder.Append('{').Append((int)token.Type).Append('}');
                         break;
                     case TokenType.EndOfText:
+                        builder.Append("EOT");
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();

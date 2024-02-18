@@ -3,17 +3,21 @@ using System.Globalization;
 
 namespace Jnk.TinyMathExpression
 {
-    public ref struct Lexer
+    public ref struct Lexer<T, TOperationHandler>
+        where T : unmanaged
+        where TOperationHandler : unmanaged, IOperationHandler<T>
     {
         private int _index;
         private readonly ReadOnlySpan<char> _expression;
-        private readonly Span<Token> _buffer;
+        private readonly Span<Token<T>> _buffer;
+        private readonly TOperationHandler _handler;
 
-        public Lexer(ReadOnlySpan<char> expression, Span<Token> buffer)
+        public Lexer(ReadOnlySpan<char> expression, Span<Token<T>> buffer, TOperationHandler handler)
         {
             _index = 0;
             _expression = expression;
             _buffer = buffer;
+            _handler = handler;
 
             if (_buffer.Length < expression.Length)
                 throw new ArgumentException("The result buffer needs to have at least the same length as the expression.", nameof(_buffer));
@@ -29,27 +33,27 @@ namespace Jnk.TinyMathExpression
                 while (_expression[_index] == ' ')
                     _index++;
 
-                ref Token token = ref _buffer[bufferIndex++];
+                ref Token<T> token = ref _buffer[bufferIndex++];
 
                 if (!TryParse(ref token))
                     throw new ArgumentException($"Error when parsing expression '{_expression.ToString()}' after '{_expression[.._index].ToString()}'.");
             }
 
-            _buffer[bufferIndex++] = new Token(TokenType.EndOfText);
+            _buffer[bufferIndex++] = new Token<T>(TokenType.EndOfText);
             return bufferIndex;
         }
 
-        private bool TryParse(ref Token token)
+        private bool TryParse(ref Token<T> token)
         {
             return TryParseOperator(ref token)
-                || TryParseSeparator(ref token)
-                || TryParseKeyword(ref token)
-                || TryParseLiteral(ref token)
-                || TryParseConstant(ref token)
-                || TryParseIdentifier(ref token);
+                   || TryParseSeparator(ref token)
+                   || TryParseKeyword(ref token)
+                   || TryParseLiteral(ref token)
+                   || TryParseConstant(ref token)
+                   || TryParseIdentifier(ref token);
         }
 
-        private bool TryParseOperator(ref Token token)
+        private bool TryParseOperator(ref Token<T> token)
         {
             TokenType tokenType = _expression[_index] switch
             {
@@ -58,36 +62,36 @@ namespace Jnk.TinyMathExpression
                 '*' => TokenType.Mul,
                 '/' => TokenType.Div,
                 '^' => TokenType.Pow,
-                _   => TokenType.None
+                _ => TokenType.None
             };
 
             if (tokenType == TokenType.None)
                 return false;
 
-            token = new Token(tokenType);
+            token = new Token<T>(tokenType);
             _index++;
             return true;
         }
 
-        private bool TryParseSeparator(ref Token token)
+        private bool TryParseSeparator(ref Token<T> token)
         {
             TokenType tokenType = _expression[_index] switch
             {
                 '(' => TokenType.OpenParenthesis,
                 ')' => TokenType.ClosedParenthesis,
                 ',' => TokenType.Comma,
-                _   => TokenType.None
+                _ => TokenType.None
             };
 
             if (tokenType == TokenType.None)
                 return false;
 
-            token = new Token(tokenType);
+            token = new Token<T>(tokenType);
             _index++;
             return true;
         }
 
-        private bool TryParseKeyword(ref Token token)
+        private bool TryParseKeyword(ref Token<T> token)
         {
             var length = 0;
             while (_index + length < _expression.Length &&
@@ -111,30 +115,27 @@ namespace Jnk.TinyMathExpression
             if (tokenType == TokenType.None)
                 return false;
 
-            token = new Token(tokenType);
+            token = new Token<T>(tokenType);
             _index += length;
             return true;
         }
 
-        private bool TryParseLiteral(ref Token token)
+        private bool TryParseLiteral(ref Token<T> token)
         {
             var length = 0;
-            while (_index + length < _expression.Length && (
-                       _expression[_index + length] >= '0' &&
-                       _expression[_index + length] <= '9' ||
-                       _expression[_index + length] == '.'))
+            while (_index + length < _expression.Length && _handler.IsCharacterValidInLiteral(_expression[_index + length]))
                 length++;
 
-            ReadOnlySpan<char> number = _expression.Slice(_index, length);
-            if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            ReadOnlySpan<char> literal = _expression.Slice(_index, length);
+            if (!_handler.TryParseLiteral(literal, out T value))
                 return false;
 
-            token = new Token(TokenType.Literal, value);
+            token = new Token<T>(TokenType.Literal, value);
             _index += length;
             return true;
         }
 
-        private bool TryParseConstant(ref Token token)
+        private bool TryParseConstant(ref Token<T> token)
         {
             var length = 0;
             while (_index + length < _expression.Length &&
@@ -154,12 +155,13 @@ namespace Jnk.TinyMathExpression
             if (tokenType == TokenType.None)
                 return false;
 
-            token = new Token(tokenType);
+            token = new Token<T>(tokenType);
             _index += length;
             return true;
         }
 
-        private bool TryParseIdentifier(ref Token token)
+
+        private bool TryParseIdentifier(ref Token<T> token)
         {
             bool isIdentifier = _expression[_index] == '{' &&
                                 _expression[_index + 1] >= '0' &&
@@ -170,7 +172,9 @@ namespace Jnk.TinyMathExpression
                 return false;
 
             int value = _expression[_index + 1] - '0';
-            token = new Token(TokenType.Parameter, value);
+            var parameter = (TokenType) value;
+
+            token = new Token<T>(parameter);
             _index += 3;
             return true;
         }

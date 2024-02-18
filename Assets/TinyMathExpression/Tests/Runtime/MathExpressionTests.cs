@@ -1,5 +1,8 @@
-﻿using Jnk.TinyMathExpression;
+﻿using System;
+using System.Buffers;
+using Jnk.TinyMathExpression;
 using NUnit.Framework;
+using UnityEngine;
 using UnityEngine.TestTools.Constraints;
 using Is = NUnit.Framework.Is;
 
@@ -26,9 +29,12 @@ namespace TinyMathExpressions.Tests.Runtime
         [TestCase("cos( PI )", -1)]
         [TestCase("(3 * 4) - 5", 7)]
         [TestCase("3 * (4 - 5)", -3)]
+        [TestCase("10 - 5 - 2", 3)]
+        [TestCase("16 / 4 / 2", 2)]
         public static void Evaluate_ReturnsCorrectValue(string expression, double expected)
         {
             var expr = new MathExpression(expression);
+            Debug.Log(expr.ToInstructionString());
             double actual = expr.Evaluate();
 
             Assert.That(actual, Is.EqualTo(expected));
@@ -56,9 +62,9 @@ namespace TinyMathExpressions.Tests.Runtime
         public static void Evaluate_DoesNotAllocateGCMemory(string expression)
         {
             var expr = new MathExpression(expression);
-            void EvaluateCall() => expr.Evaluate();
+            void TestDelegate() => expr.Evaluate();
 
-            Assert.That(EvaluateCall, Is.Not.AllocatingGCMemory());
+            Assert.That(TestDelegate, Is.Not.AllocatingGCMemory());
         }
 
         [TestCase("3 + + 2")]
@@ -66,10 +72,12 @@ namespace TinyMathExpressions.Tests.Runtime
         [TestCase("round(2..2) + 3.0")]
         public static void Constructor_WithBadInput_ThrowsException(string expression)
         {
-            Assert.That(() =>
+            void TestDelegate()
             {
                 var expr = new MathExpression(expression);
-            }, Throws.ArgumentException);
+            }
+
+            Assert.That(TestDelegate, Throws.ArgumentException);
         }
 
         [TestCase("{0}", 1, 1)]
