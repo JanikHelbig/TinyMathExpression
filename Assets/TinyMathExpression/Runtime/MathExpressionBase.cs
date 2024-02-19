@@ -45,7 +45,7 @@ namespace Jnk.TinyMathExpression
         {
             _source = expression;
 
-            Span<Token<T>> tokenBuffer = stackalloc Token<T>[expression.Length];
+            Span<Token<T>> tokenBuffer = stackalloc Token<T>[expression.Length + 1];
             int tokenCount = new Lexer<T, TOperationHandler>(expression, tokenBuffer, Handler).Tokenize();
 
             Span<Instruction<T>> instructionBuffer = stackalloc Instruction<T>[tokenCount];
